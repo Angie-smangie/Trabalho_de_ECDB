@@ -1,0 +1,255 @@
+# **Trabalho de Extração de Conhecimento de Dados Biológicos**
+#### **Grupo 1** - Ângela Sousa (*PG42489*), Luís Babo (*PG58817*) & Rúben Fernandes (*PG58818*)
+
+Para a realização do trabalho da Unidade Curricular de Extração de Conhecimento de Dados Biológicos de 25/26, escolheu-se um conjunto de dados de expressão genética de leucemia mieloide aguda (AML) disponíveis na plataforma cBioPortal sob o nome "Acute Myeloid Leukemia (OHSU, Nature 2018)".
+
+Os dados foram submetidos com o artigo "Functional genomic landscape of acute myeloid leukaemia" por Tyner et al., 2028, disponível através do doi: 10.1038/s41586-018-0623-z.
+
+## **Origem dos Dados e a sua Relevância**
+
+Este conjunto inclui dados de expressão genética e informação clínica associada aos pacientes.
+
+A leucemia mieloide aguda é um tipo agressivo de cancro, sendo assim relevante estudar padrões de expressão genética para identificar genes diferencialmente expressos e possíveis biomarcadores.
+
+A integração de dados clínicos com expressão génica permite análises mais completas e biologicamente relevantes.
+
+## **Preparação e Pré-processamento dos Dados**
+
+Iniciou-se a análise com a importação do dataset. Durante a importação em si, realizou-se a transposição da matriz de maneira a que a que as colunas correspondem-se às variáveis (genes) e as linhas às amostras (pacientes), garantindo assim a estrutura de dados adequada para futura análise estatística.
+
+Posteriormente, foi necessário corrigir os nomes das colunas com a função colnames(), utilizando a primeira linha do dataset como cabeçalho das variáveis, sendo esta linha removida após essa operação.
+
+De seguida, avaliou-se a presença de valores em falta (NA), confirmando-se a ausência dos mesmos no dataset.
+
+Também se importou o ficheiro com os metadados dos pacientes para auxilixar em análises supervisionadas.
+
+Após este processo, obteve-se um conjunto de dados mais relevante e adequado para a análise de expressão diferencial.
+Por fim, confirmou-se a consistência dos dados e a correta organização das variáveis, garantindo a correta preparação do dataset para as análises subsequentes.
+
+
+```{r}
+#library(cbioportalR) 
+#library(dplyr)
+#set_cbioportal_db(db = "public")
+library(dplyr)
+library(tibble)
+library(limma)
+library(ggplot2)
+```
+
+```{r}
+#available_clinical_attributes(study_id = "aml_ohsu_2018")
+#available_patients(study_id = "aml_ohsu_2018")
+# Iremos completar o upload através do package cbioportalR assim que soubermos como obter dados que queremos em específico 
+# Alternativamente, fizemos o upload através do import do RStudio
+
+data_zscores <- as.data.frame(t(read.delim("./aml_ohsu_2018/data_mrna_seq_cpm_zscores_ref_all_samples.txt")))
+
+colnames(data_zscores) <- as.character(unlist(data_zscores[1,]))  
+data_zscores <- data_zscores[-1, ]
+data_zscores <- data_zscores[-1, ]
+
+view(data_zscores)
+```
+
+```{r}
+any(is.na(data_zscores))
+```
+
+```{r}
+patient_info <- as.data.frame(read.delim("./aml_ohsu_2018/data_clinical_patient.txt", skip = 4, header = T))
+view(patient_info)
+```
+
+## **Sumarização dos Dados**
+
+Foi realizada uma análise estatística descritiva das variáveis clínicas presentes no conjunto de dados. Relativamente às variáveis numéricas, a idade ao diagnóstico (**AGE_AT_DIAGNOSIS**) apresenta uma mediana de 61 anos (média de 57,5), variando entre 1 e 87 anos. O tempo de sobrevivência (**OS_MONTHS**) apresenta maior variabilidade, com mediana de aproximadamente 10 meses e valores que podem atingir até cerca de 174 meses, embora com um número considerável de valores em falta.
+
+No que diz respeito às variáveis categóricas, na variável **SEX** observa-se uma ligeira predominância do sexo masculino (311 vs 251). A maioria dos doentes pertence ao grupo étnico (**ETHNICITY**) *White*, representando a grande maioria da amostra.
+A maior parte dos indivíduos foi diagnosticada com Leucemia Mieloide Aguda (AML), sendo esta a categoria dominante nas variáveis de diagnóstico(**DIAGNOSIS**, **DIAGNOSIS_AT_INCLUSION**). Em termos de tratamento (**TREATMENT_TYPE**), a quimioterapia padrão é a abordagem mais frequente, muitas vezes combinada com transplante de medula óssea ou outras terapias.
+Relativamente ao estado de sobrevivência (**OS_STATUS**), verifica-se um maior número de doentes falecidos (290) em comparação com os vivos (215), refletindo a gravidade da doença. A principal causa de morte (**CAUSE_OF_DEATH_SOURCE**) está associada à progressão da doença.
+
+De forma geral, os dados evidenciam uma população maioritariamente adulta, com elevada heterogeneidade clínica e predominância de AML, sendo possível observar padrões relevantes que justificam análises mais aprofundadas, como a expressão diferencial.
+
+```{r}
+sapply(patient_info[, sapply(patient_info, is.numeric)], summary)
+
+char_cols <- sapply(patient_info[, -1], is.character)
+
+sapply(patient_info[, -1][, char_cols], table)
+```
+
+## **Análise Estatística Univariada**
+
+A distribuição da idade ao diagnóstico revela uma maior concentração de casos entre os 50 e os 70 anos, indicando que a doença afeta predominantemente indivíduos em idade adulta avançada, embora existam alguns casos em idades mais jovens.
+
+No que diz respeito ao estado de sobrevivência, observa-se uma predominância de doentes falecidos face aos vivos, evidenciando a elevada gravidade associada à doença.
+
+A análise de componentes principais (PCA) mostra uma dispersão relativamente homogénea das amostras, sem formação de grupos bem definidos. Isto sugere que o estado de sobrevivência, por si só, não é suficiente para explicar a variabilidade global da expressão genética.
+
+```{r}
+df_num <- as.data.frame(lapply(data_zscores, function(x) as.numeric(as.character(x))))
+rownames(df_num) <- rownames(data_zscores)
+
+# 2. Estatística Descritiva da Clínica
+
+colunas_numericas <- c("AGE_AT_DIAGNOSIS", "OS_MONTHS")
+
+# Resumo numérico da Idade e Meses de Sobrevivência
+summary(patient_info[, colunas_numericas])
+
+# Resumo categórico do Género e Status de Sobrevivência
+table(patient_info$SEX)
+table(patient_info$OS_STATUS)
+
+# 3. Exploração com PCA
+pca_res <- prcomp(df_num, scale. = TRUE)
+pca_data <- as.data.frame(pca_res$x)
+pca_data$SAMPLE_ID <- rownames(pca_data)
+
+
+sample_info <- as.data.frame(read.delim("./aml_ohsu_2018/data_clinical_sample.txt", skip = 4, header = TRUE))
+clinica_completa <- left_join(sample_info, patient_info, by = "PATIENT_ID")
+viz_data <- left_join(pca_data, clinica_completa, by = "SAMPLE_ID")
+
+
+viz_data <- left_join(pca_data, patient_info, by = c("SAMPLE_ID" = "PATIENT_ID"))
+
+ggplot(viz_data, aes(x=PC1, y=PC2, color=OS_STATUS)) +
+  geom_point(size=3, alpha=0.8) +
+  theme_minimal() +
+  labs(title = "PCA: Agrupamento de Amostras de AML", 
+       subtitle = "Exploração baseada em Z-scores de expressão")
+
+
+clinica_completa <- read.delim("./aml_ohsu_2018/aml_ohsu_2018_clinical_data.tsv", header = TRUE, check.names = FALSE)
+
+colunas_numericas <- c("Age at Diagnosis", "Bone Marrow Blast Percentage", 
+                             "WBC", "Platelet count", "Overall Survival (Months)")
+
+summary(clinica_completa[, colunas_numericas])
+
+table(clinica_completa$`ELN 2017 Risk Classification`)
+table(clinica_completa$`FLT3-ITD Consensus Call`)
+table(clinica_completa$`NPM1 Consensus Call`)
+```
+```{r}
+ggplot(patient_info, aes(x = AGE_AT_DIAGNOSIS)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribuição da idade ao diagnóstico",
+    x = "Idade ao diagnóstico",
+    y = "Frequência"
+  )
+
+ggplot(patient_info, aes(x = OS_STATUS)) +
+  geom_bar(fill = "tomato") +
+  theme_minimal() +
+  labs(
+    title = "Distribuição do estado de sobrevivência",
+    x = "OS_STATUS",
+    y = "Número de amostras"
+  )
+```
+
+## **Análise	de	expressão	diferencial	e	de enriquecimento**
+
+Foi realizada uma análise de expressão diferencial para comparar doentes vivos (**0:LIVING**) e falecidos (**1:DECEASED**). Os dados de expressão genética foram organizados numa matriz e integrados com a informação clínica, garantindo o correto alinhamento entre amostras.
+
+A análise foi conduzida utilizando o pacote *limma* através de um modelo linear (*lmFit*) seguido de moderação empírica (*eBayes*). Os genes diferencialmente expressos foram obtidos com *topTable*.
+
+Considerando um limiar de significância de **adj.P.Val** < 0.05, foram identificados 569 genes diferencialmente expressos entre os dois grupos. Alguns dos genes mais relevantes incluem *TJP2*, *FNDC3B*, *NRIP1* e *CD109*, sugerindo uma possível associação com o estado de sobrevivência.
+
+```{r}
+# expressão: linhas = genes, colunas = amostras
+expr_mat <- t(as.matrix(df_num))
+mode(expr_mat) <- "numeric"
+
+# IDs das amostras vindos da expressão
+expr_ids <- colnames(expr_mat)
+
+# ler sample_info
+sample_info <- as.data.frame(read.delim("./aml_ohsu_2018/data_clinical_sample.txt", skip = 4, header = TRUE))
+
+# ver nomes das colunas
+colnames(sample_info)
+
+# criar versões normalizadas dos IDs para tentar fazer match
+sample_info2 <- sample_info %>%
+  mutate(
+    SAMPLE_ID_RAW = SAMPLE_ID,
+    SAMPLE_ID_A = SAMPLE_ID,
+    SAMPLE_ID_B = paste0("aml_ohsu_2018_", SAMPLE_ID),
+    SAMPLE_ID_C = gsub("-", ".", SAMPLE_ID),
+    SAMPLE_ID_D = paste0("aml_ohsu_2018_", gsub("-", ".", SAMPLE_ID))
+  )
+
+# descobrir qual formato bate com a expressão
+sum(sample_info2$SAMPLE_ID_A %in% expr_ids)
+sum(sample_info2$SAMPLE_ID_B %in% expr_ids)
+sum(sample_info2$SAMPLE_ID_C %in% expr_ids)
+sum(sample_info2$SAMPLE_ID_D %in% expr_ids)
+
+# escolher automaticamente o melhor formato
+matches <- c(
+  A = sum(sample_info2$SAMPLE_ID_A %in% expr_ids),
+  B = sum(sample_info2$SAMPLE_ID_B %in% expr_ids),
+  C = sum(sample_info2$SAMPLE_ID_C %in% expr_ids),
+  D = sum(sample_info2$SAMPLE_ID_D %in% expr_ids)
+)
+
+best_format <- names(which.max(matches))
+best_format
+
+sample_info2$SAMPLE_ID_MATCH <- switch(
+  best_format,
+  A = sample_info2$SAMPLE_ID_A,
+  B = sample_info2$SAMPLE_ID_B,
+  C = sample_info2$SAMPLE_ID_C,
+  D = sample_info2$SAMPLE_ID_D
+)
+
+# juntar com dados clínicos do paciente
+dados_deg <- left_join(sample_info2, patient_info, by = "PATIENT_ID")
+
+# manter só amostras presentes na matriz de expressão
+dados_deg <- dados_deg %>%
+  filter(SAMPLE_ID_MATCH %in% expr_ids)
+
+# manter só grupos válidos
+dados_deg <- dados_deg %>%
+  filter(!is.na(OS_STATUS),
+         OS_STATUS %in% c("0:LIVING", "1:DECEASED"))
+
+# ordenar pela mesma ordem da expressão
+dados_deg <- dados_deg %>%
+  arrange(match(SAMPLE_ID_MATCH, expr_ids))
+
+# filtrar matriz de expressão
+expr_deg <- expr_mat[, dados_deg$SAMPLE_ID_MATCH, drop = FALSE]
+
+# confirmar alinhamento
+all(dados_deg$SAMPLE_ID_MATCH == colnames(expr_deg))
+
+# grupo
+grupo <- factor(dados_deg$OS_STATUS,
+                levels = c("0:LIVING", "1:DECEASED"))
+
+table(grupo)
+
+# modelo
+design <- model.matrix(~ grupo)
+fit <- lmFit(expr_deg, design)
+fit <- eBayes(fit)
+
+# resultados
+res_deg <- topTable(fit, coef = 2, number = Inf)
+res_deg$gene <- rownames(res_deg)
+
+sig_deg <- res_deg %>%
+  filter(adj.P.Val < 0.05)
+
+head(sig_deg)
+nrow(sig_deg)
+```
