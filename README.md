@@ -4,7 +4,7 @@ O projeto foca-se no desenvolvimento de um fluxo de trabalho (workflow) em R/Bio
 ## Conjuto de dados selecionado 
 * Título: Functional Genomic Landscape of Acute Myeloid Leukemia
 * Fonte: cBioPortal / Beat AML Program (https://www.cbioportal.org/study/summary?id=aml_ohsu_2018)
-* Referência: Tyner et al., Nature (2018)
+* Referência: Tyner et al., Nature (2018), doi: 10.1038/s41586-018-0623-z
 
 ### Descrição dos dados
 * Transcriptómica (RNA-Seq): Expressão génica (CPM e Z-scores normalizados)
