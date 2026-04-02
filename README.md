@@ -10,7 +10,7 @@ O projeto foca-se no desenvolvimento de um fluxo de trabalho (*workflow*) em R/B
 ### Descrição dos dados
 * Transcriptómica (*RNA-Seq*): Expressão génica (CPM e Z-scores normalizados)
 * Metadados Clinicos
-* Dimenção dos dados: Aproximadamente 672 amostras tumorais provenientes de 562 pacientes
+* Dimensão dos dados: Aproximadamente 672 amostras tumorais provenientes de 562 pacientes
 
 ## Autores (Grupo 1):
 * Ângela Sousa *PG42489*
