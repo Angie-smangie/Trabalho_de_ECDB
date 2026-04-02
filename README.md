@@ -3,7 +3,7 @@ Este repositório contém o trabalho desenvolvido no âmbito da Unidade Curricul
 O projeto foca-se no desenvolvimento de um fluxo de trabalho (workflow) em R/Bioconductor para a análise de dados biológicos, abrangendo desde o processamento inicial dos dados até à análise exploratória e modelação.
 ## Conjuto de dados selecionado 
 * Título: Functional Genomic Landscape of Acute Myeloid Leukemia
-* Fonte: cBioPortal / Beat AML Program
+* Fonte: cBioPortal / Beat AML Program (https://www.cbioportal.org/study/summary?id=aml_ohsu_2018)
 * Referência: Tyner et al., Nature (2018)
 
 ### Descrição dos dados
